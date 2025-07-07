@@ -1,69 +1,18 @@
-# React + TypeScript + Vite
+# Aging Summary App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Features
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config([
-    globalIgnores(['dist']),
-    {
-        files: ['**/*.{ts,tsx}'],
-        extends: [
-            // Other configs...
-
-            // Remove tseslint.configs.recommended and replace with this
-            ...tseslint.configs.recommendedTypeChecked,
-            // Alternatively, use this for stricter rules
-            ...tseslint.configs.strictTypeChecked,
-            // Optionally, add this for stylistic rules
-            ...tseslint.configs.stylisticTypeChecked,
-
-            // Other configs...
-        ],
-        languageOptions: {
-            parserOptions: {
-                project: ['./tsconfig.node.json', './tsconfig.app.json'],
-                tsconfigRootDir: import.meta.dirname,
-            },
-            // other options...
-        },
-    },
-]);
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x';
-import reactDom from 'eslint-plugin-react-dom';
-
-export default tseslint.config([
-    globalIgnores(['dist']),
-    {
-        files: ['**/*.{ts,tsx}'],
-        extends: [
-            // Other configs...
-            // Enable lint rules for React
-            reactX.configs['recommended-typescript'],
-            // Enable lint rules for React DOM
-            reactDom.configs.recommended,
-        ],
-        languageOptions: {
-            parserOptions: {
-                project: ['./tsconfig.node.json', './tsconfig.app.json'],
-                tsconfigRootDir: import.meta.dirname,
-            },
-            // other options...
-        },
-    },
-]);
-```
+- **Dashboard**:
+  - AG Grid configuration with flexible columns, pagination, filtering, and sorting capabilities.
+  - Highcharts integration featuring bar, area, and trend charts for comprehensive data visualization.
+  - Key metrics cards displaying Total AR, Past-Due amounts, Average Days Sales Outstanding (DSO), and Percentage Collected in the Last 30 Days (% Collected L30d).
+- **Customized Bucket Views**:
+  - `/` (Dashboard): Overview of all receivables across all aging buckets.
+  - `/accounting`: Displays invoices aged 21–30 days, including dynamic metrics and editable grid columns for detailed management.
+  - `/sales`: Shows invoices aged 31–45 days with tailored metrics and grid configurations.
+  - `/escalation`: Contains invoices aged 46–90 days for focused follow-up.
+  - `/demand-letter`: Lists invoices aged 91+ days, representing the most overdue accounts.
+- **QuickBooks Online Integration**:
+  - RTK Query service setup through the `accountingApi` slice for efficient data fetching.
+  - Utilizes `transformResponse` to map and aggregate the `AgedReceivableDetail` report data into usable formats.
+  - Supports mocking via MSW to facilitate development and testing environments, with conditional usage based on production or development mode.
