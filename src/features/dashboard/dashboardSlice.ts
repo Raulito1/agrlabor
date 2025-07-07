@@ -92,7 +92,10 @@ const dashboardSlice = createSlice({
             ) {
                 delete state.filters[id];
             } else {
-                state.filters[id] = value as any;
+                state.filters[id] = value as
+                    | string
+                    | number
+                    | (string | number)[];
             }
         },
 

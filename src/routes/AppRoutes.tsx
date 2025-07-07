@@ -6,6 +6,7 @@ import SalesPage from '@/pages/SalesPage';
 import EscalationPage from '@/pages/EscalationPage';
 import DemandLetterPage from '@/pages/DemandLetterPage';
 import SettingsPage from '@/pages/SettingsPage';
+import NotFoundPage from '@/pages/NotFoundPage';
 import DashboardLayout from '@/layout/DashboardLayout';
 
 const AppRoutes = () => {
@@ -19,6 +20,7 @@ const AppRoutes = () => {
                 <Route path="escalations" element={<EscalationPage />} />
                 <Route path="demand-letters" element={<DemandLetterPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="*" element={<NotFoundPage />} />
             </Route>
         </Routes>
     );

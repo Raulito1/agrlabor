@@ -1,20 +1,117 @@
-export const DemandLetterPage: React.FC = () => {
+import React, { useMemo } from 'react';
+import { MetricCard } from '../features/dashboard/components/MetricCard';
+import { useGetAgedReceivableDetailQuery } from '../services/accountingApi';
+import { AgGridReact } from 'ag-grid-react';
+import { agGridColumns } from '../utils/agGridColumns';
+import type { ColDef } from 'ag-grid-community';
+
+const DemandLetterPage: React.FC = () => {
+    // Fetch all invoice entries
+    const {
+        data: rows = [],
+        isLoading,
+        error,
+    } = useGetAgedReceivableDetailQuery({
+        realmId: '1386066315',
+        reportDate: '2025-06-30',
+        startDueDate: '2025-01-01',
+        endDueDate: '2025-06-30',
+    });
+
+    // Helper to parse MM/DD/YY strings into Date
+    const parseDueDate = (value: string) => {
+        const parts = value.split('/');
+        if (parts.length === 3) {
+            const [m, d, yRaw] = parts.map((p) => parseInt(p, 10));
+            const y = yRaw;
+            return new Date(y, m - 1, d);
+        }
+        return new Date(value);
+    };
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    // Compute 91+ day bucket
+    const filteredRows91Plus = useMemo(() => {
+        const today = new Date();
+        return rows.filter((r) => {
+            const due = parseDueDate(r.dueDate);
+            const diffDays = Math.floor(
+                (today.getTime() - due.getTime()) / MS_PER_DAY
+            );
+            return diffDays >= 91;
+        });
+    }, [rows, MS_PER_DAY]);
+
+    // Metrics for 91+ day bucket
+    const bucketCount = filteredRows91Plus.length;
+    const bucketBalance = filteredRows91Plus.reduce(
+        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        0
+    );
+
+    if (isLoading) return <div>Loading...</div>;
+    if (error) return <div>Error loading data</div>;
+
+    // Compute dynamic metrics
+    const totalInvoices = rows.length;
+    const outstandingBalance = rows.reduce(
+        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        0
+    );
+
+    const fmtCurrency = (val: number) =>
+        `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtPercent = (val: number) => `${val.toFixed(2)}%`;
+
+    // Percentage of invoices in 91+ bucket relative to total invoices
+    const pctInvoices91Plus =
+        totalInvoices > 0 ? (bucketCount / totalInvoices) * 100 : 0;
+
+    // Percentage of bucket balance relative to total outstanding balance
+    const pctBalance91Plus =
+        outstandingBalance > 0 ? (bucketBalance / outstandingBalance) * 100 : 0;
+
     return (
         <div>
-            <h2 className="text-2xl font-bold mb-6">Demand Letters Overview</h2>
+            <h2 className="text-2xl font-bold mb-6">Accounting Overview</h2>
 
-            {/* Placeholder for demand letter metrics */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-                <p className="text-gray-600">
-                    Detailed demand letter metrics and actions will appear here.
-                </p>
+            {/* Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
+                <MetricCard
+                    title="% Invoices (91+)"
+                    value={fmtPercent(pctInvoices91Plus)}
+                />
+                <MetricCard
+                    title="Balance (91+)"
+                    value={fmtCurrency(bucketBalance)}
+                />
+                <MetricCard
+                    title="% Balance (91+)"
+                    value={fmtPercent(pctBalance91Plus)}
+                />
             </div>
 
-            {/* Placeholder for demand letter list or table */}
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <p className="text-gray-600">
-                    List of demand letters will be displayed here.
-                </p>
+                <div
+                    className="ag-theme-alpine"
+                    style={{ width: '100%', height: 400 }}
+                >
+                    <AgGridReact
+                        rowData={filteredRows91Plus}
+                        columnDefs={agGridColumns as ColDef[]}
+                        defaultColDef={{
+                            flex: 1,
+                            minWidth: 100,
+                            resizable: true,
+                        }}
+                        pagination
+                        paginationPageSize={10}
+                        paginationPageSizeSelector={false}
+                        gridOptions={{
+                            theme: 'legacy',
+                        }}
+                    />
+                </div>
             </div>
         </div>
     );

@@ -26,7 +26,7 @@ const DashboardLayout: React.FC = () => {
             <header className="w-full p-4 flex items-center justify-center border-b bg-gradient-to-r from-blue-600 to-blue-400">
                 <ChartColumnIncreasing className="h-6 w-6 text-white mr-2 animate-pulse" />
                 <h1 className="text-3xl font-extrabold text-white drop-shadow-lg">
-                    Seso
+                    Seso Dashboard
                 </h1>
             </header>
             <div className="flex flex-1 overflow-hidden">

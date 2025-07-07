@@ -1,9 +1,3 @@
-// Example cell renderer function for the 'Stage' column
-function stageCellRenderer(params: any) {
-    // Customize rendering logic as needed
-    return params.value;
-}
-
 export const agGridColumns = [
     {
         headerName: 'Customer',
@@ -12,30 +6,30 @@ export const agGridColumns = [
         filter: true,
     },
     {
-        headerName: 'Invoice',
-        field: 'invoice',
+        headerName: 'Due Date',
+        field: 'dueDate',
         sortable: true,
-        filter: true,
+        filter: 'agDateColumnFilter',
+        // assume dates are strings in MM/DD/YY or similar – adjust parser as needed
+        valueFormatter: (params) =>
+            params.value ? new Date(params.value).toLocaleDateString() : '',
     },
-    { headerName: 'HFID', field: 'hfid', sortable: true, filter: true },
     {
-        headerName: 'Amount',
-        field: 'amount',
+        headerName: 'Open Balance',
+        field: 'openBalance',
         sortable: true,
         filter: true,
         cellStyle: { textAlign: 'right' },
-    },
-    {
-        headerName: 'Stage',
-        field: 'stage',
-        sortable: true,
-        filter: true,
-        cellRenderer: stageCellRenderer,
-    },
-    {
-        headerName: 'Next Action',
-        field: 'nextAction',
-        sortable: true,
-        filter: true,
+        // format as currency
+        valueFormatter: (params) => {
+            const val = params.value;
+            if (val == null || val === '') return '';
+            const num =
+                typeof val === 'number'
+                    ? val
+                    : parseFloat(String(val).replace(/,/g, ''));
+            if (isNaN(num)) return String(val);
+            return `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        },
     },
 ];

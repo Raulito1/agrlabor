@@ -1,14 +1,15 @@
 import { configureStore } from '@reduxjs/toolkit';
+import { accountingApi } from '../services/accountingApi';
 
-// Import your reducers here
-// import userReducer from '../features/user/userSlice';
-
-const store = configureStore({
+export const store = configureStore({
     reducer: {
-        // user: userReducer,
-        // Add more reducers here
+        // Add RTK Query data reducer
+        [accountingApi.reducerPath]: accountingApi.reducer,
+        // Add other reducers here
     },
-    // middleware, devTools, and other options can be customized here
+    middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware().concat(accountingApi.middleware),
+    devTools: process.env.NODE_ENV !== 'production',
 });
 
 export type RootState = ReturnType<typeof store.getState>;

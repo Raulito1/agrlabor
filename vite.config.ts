@@ -14,6 +14,16 @@ export default defineConfig({
     server: {
         port: 3000,
         open: true,
+        // Only proxy to the real backend when not in dev (so MSW can mock in dev)
+        ...(!import.meta.env.DEV && {
+            proxy: {
+                '/api/accounting': {
+                    target: 'http://localhost:4000',
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(/^\/api\/accounting/, ''),
+                },
+            },
+        }),
     },
     build: {
         outDir: 'dist',

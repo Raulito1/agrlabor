@@ -1,26 +1,166 @@
 import React from 'react';
 import { MetricCard } from '../features/dashboard/components/MetricCard';
+import { useGetAgedReceivableDetailQuery } from '../services/accountingApi';
+import { AgGridReact } from 'ag-grid-react';
+import { agGridColumns } from '../utils/agGridColumns';
+import { useMemo } from 'react';
+import type { ColDef } from 'ag-grid-community';
 
-// TODO: Replace these hardcoded values with real data from your API or state
-const AccountingPage: React.FC = () => (
-    <div>
-        <h2 className="text-2xl font-bold mb-6">Accounting Overview</h2>
+const AccountingPage: React.FC = () => {
+    const {
+        data: rows = [],
+        isLoading,
+        error,
+    } = useGetAgedReceivableDetailQuery({
+        realmId: '1386066315',
+        reportDate: '2025-06-30',
+        startDueDate: '2025-01-01',
+        endDueDate: '2025-06-30',
+    });
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
-            <MetricCard title="Total Invoices" value="128" />
-            <MetricCard title="Total Payments" value="$42.7K" />
-            <MetricCard title="Outstanding Balance" value="$9.3K" />
-            <MetricCard title="Overdue Invoices" value="5" />
+    // Helper to parse MM/DD/YY strings into Date
+    const parseDueDate = (value: string) => {
+        const parts = value.split('/');
+        if (parts.length === 3) {
+            const [m, d, yRaw] = parts.map((p) => parseInt(p, 10));
+            const y = yRaw;
+            return new Date(y, m - 1, d);
+        }
+        return new Date(value);
+    };
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    // Compute 21–30 day bucket
+    const filteredRows21To30 = useMemo(() => {
+        const today = new Date();
+        return rows.filter((r) => {
+            const due = parseDueDate(r.dueDate);
+            const diffDays = Math.floor(
+                (today.getTime() - due.getTime()) / MS_PER_DAY
+            );
+            return diffDays >= 21 && diffDays <= 30;
+        });
+    }, [rows, MS_PER_DAY]);
+
+    // Metrics for 21–30 day bucket
+    const bucketCount = filteredRows21To30.length;
+    const bucketBalance = filteredRows21To30.reduce(
+        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        0
+    );
+
+    if (isLoading) return <div>Loading...</div>;
+    if (error) return <div>Error loading data</div>;
+
+    // Compute dynamic metrics
+    const totalInvoices = rows.length;
+    const outstandingBalance = rows.reduce(
+        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        0
+    );
+    const fmtCurrency = (val: number) =>
+        `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtPercent = (val: number) => `${val.toFixed(2)}%`;
+
+    // Percentage of invoices in 21–30d bucket relative to total invoices
+    const pctInvoicesOfTotal =
+        totalInvoices > 0 ? (bucketCount / totalInvoices) * 100 : 0;
+
+    // Percentage of bucket balance relative to total outstanding balance
+    const pctBalanceOfTotal =
+        outstandingBalance > 0 ? (bucketBalance / outstandingBalance) * 100 : 0;
+
+    // Initialize default values for editable fields
+    const gridRows = filteredRows21To30.map((r) => ({
+        ...r,
+        action_taken: '',
+        slack_updated: false,
+        checkboxB: false,
+        checkboxC: false,
+    }));
+
+    // Additional editable columns
+    const editableCols: ColDef[] = [
+        // Dropdown column 1
+        {
+            headerName: 'Action Taken',
+            field: 'action_taken',
+            editable: true,
+            cellEditor: 'agSelectCellEditor',
+            cellEditorParams: {
+                values: ['Accounting Email Sent'],
+            },
+        },
+        {
+            headerName: 'Slack Updated',
+            field: 'slack_updated',
+            editable: true,
+            cellEditor: 'agCheckboxCellEditor',
+            cellRenderer: 'agCheckboxCellRenderer',
+        },
+        {
+            headerName: 'Checkbox B',
+            field: 'checkboxB',
+            editable: true,
+            cellEditor: 'agCheckboxCellEditor',
+            cellRenderer: 'agCheckboxCellRenderer',
+        },
+        {
+            headerName: 'Checkbox C',
+            field: 'checkboxC',
+            editable: true,
+            cellEditor: 'agCheckboxCellEditor',
+            cellRenderer: 'agCheckboxCellRenderer',
+        },
+    ];
+
+    return (
+        <div>
+            <h2 className="text-2xl font-bold mb-6">Accounting Overview</h2>
+
+            {/* Key Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
+                <MetricCard
+                    title="% Invoices (21–30d)"
+                    value={fmtPercent(pctInvoicesOfTotal)}
+                />
+                <MetricCard
+                    title="Balance (21–30d)"
+                    value={fmtCurrency(bucketBalance)}
+                />
+                <MetricCard
+                    title="% Balance (21–30d)"
+                    value={fmtPercent(pctBalanceOfTotal)}
+                />
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div
+                    className="ag-theme-alpine"
+                    style={{ width: '100%', height: 400 }}
+                >
+                    <AgGridReact
+                        rowData={gridRows}
+                        columnDefs={[
+                            ...(agGridColumns as ColDef[]),
+                            ...editableCols,
+                        ]}
+                        defaultColDef={{
+                            flex: 1,
+                            minWidth: 100,
+                            resizable: true,
+                        }}
+                        pagination
+                        paginationPageSize={10}
+                        paginationPageSizeSelector={false}
+                        gridOptions={{
+                            theme: 'legacy',
+                        }}
+                    />
+                </div>
+            </div>
         </div>
-
-        {/* Placeholder for detailed tables, charts, or other components */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <p className="text-gray-600">
-                Detailed accounting tables and charts will appear here.
-            </p>
-        </div>
-    </div>
-);
+    );
+};
 
 export default AccountingPage;

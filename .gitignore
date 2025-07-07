@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Ignore data directory in project root
+/data/
+
+# Ignore specific file in root
+/src/mocks/fixtures/agedReceivableDetail.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -21,4 +27,3 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
