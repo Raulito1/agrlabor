@@ -8,6 +8,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { useGetAgedReceivableDetailQuery } from '../services/accountingApi';
 
 import { agGridColumns } from '../utils/agGridColumns';
+import type { ColDef } from 'ag-grid-community';
 
 const DashboardPage: React.FC = () => {
     // Move useState hooks up here to ensure they're always called
@@ -233,6 +234,7 @@ const DashboardPage: React.FC = () => {
                         onChange={(e) =>
                             setSelectedCustomer(e.target.value || null)
                         }
+                        aria-label="Filter by customer"
                     >
                         <option key="all-customers" value="">All Customers</option>
                         {customerOptions.map((c) => (
@@ -251,8 +253,7 @@ const DashboardPage: React.FC = () => {
                     style={{ width: '100%', minHeight: 350 }}
                 >
                     <AgGridReact
-                        rowData={filteredRows}
-                        columnDefs={agGridColumns}
+                        columnDefs={agGridColumns as ColDef[]}
                         defaultColDef={{
                             flex: 1,
                             minWidth: 100,

@@ -9,6 +9,7 @@ import { accountingApi } from '../services/accountingApi';
 import { useUpdateAgedReceivableDetailMutation } from '../services/accountingApi';
 import type { ColDef } from 'ag-grid-community';
 import { useCallback } from 'react';
+import type { AppDispatch } from '@/app/store';
 
 const SalesPage: React.FC = () => {
     // Fetch all invoice entries
@@ -18,7 +19,7 @@ const SalesPage: React.FC = () => {
         error,
     } = useGetAgedReceivableDetailQuery();
     const [updateAgedReceivableDetail] = useUpdateAgedReceivableDetailMutation();
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     const onCellValueChanged = useCallback(
       async (params) => {
         const { id, ...rest } = params.data;
@@ -204,8 +205,6 @@ const SalesPage: React.FC = () => {
                             theme: 'legacy',
                         }}
                         getRowId={(params) => params.data.id}
-                        immutableData={true}
-                        deltaRowDataMode={true}
                         onCellValueChanged={onCellValueChanged}
                     />
                 </div>

@@ -88,9 +88,7 @@ function AgingChartInner({
                         events: {
                             click() {
                                 if (onPointClick) {
-                                    // @ts-expect-error – Highcharts typings incomplete for userData
-                                    const { label, value } = this
-                                        .userData as AgingDatum;
+                                    const { label, value } = (this as any).userData as AgingDatum;
                                     onPointClick({ label, value });
                                 }
                             },

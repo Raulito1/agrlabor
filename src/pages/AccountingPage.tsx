@@ -7,6 +7,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { agGridColumns } from '../utils/agGridColumns';
 import type { ColDef } from 'ag-grid-community';
 import { useUpdateAgedReceivableDetailMutation } from '../services/accountingApi';
+import type { AppDispatch } from '@/app/store';
 
 const AccountingPage: React.FC = () => {
     const {
@@ -100,7 +101,7 @@ const AccountingPage: React.FC = () => {
 
     // RTK Query mutation for persisting updates
     const [updateAgedReceivableDetail] = useUpdateAgedReceivableDetailMutation();
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     const onCellValueChanged = useCallback(
       async (params) => {
         const { id, ...rest } = params.data;
@@ -222,8 +223,6 @@ const AccountingPage: React.FC = () => {
                             theme: 'legacy',
                         }}
                         getRowId={(params) => params.data.id}
-                        immutableData={true}
-                        deltaRowDataMode={true}
                         onCellValueChanged={onCellValueChanged}
                     />
                 </div>

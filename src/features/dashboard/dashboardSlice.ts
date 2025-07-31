@@ -1,6 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '@/app/store';
+// If RootState does not include 'dashboard', you may need to define/select the correct state shape here.
 
 /**
  * UI‑only state for the dashboard feature.
@@ -109,13 +110,14 @@ const dashboardSlice = createSlice({
 /* -------------------------------------------------- */
 /*                     Selectors                      */
 /* -------------------------------------------------- */
+// If your dashboard reducer is mounted at a different key, update 'dashboard' to the correct key.
+// For example, if it's under 'dashboardSlice', use state.dashboardSlice.
+export const selectDashboardState = (state: RootState) => (state as any).dashboard;
 
-export const selectDashboardState = (state: RootState) => state.dashboard;
-
-export const selectSortField = (state: RootState) => state.dashboard.sortField;
+export const selectSortField = (state: RootState) => (state as any).dashboard.sortField;
 export const selectSortDirection = (state: RootState) =>
-    state.dashboard.sortDirection;
-export const selectFilters = (state: RootState) => state.dashboard.filters;
+    (state as any).dashboard.sortDirection;
+export const selectFilters = (state: RootState) => (state as any).dashboard.filters;
 
 /* -------------------------------------------------- */
 /*                      Exports                       */

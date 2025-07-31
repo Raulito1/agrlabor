@@ -64,7 +64,7 @@ export const accountingApi = createApi({
           AgedReceivableDetailRecord,
           Partial<AgedReceivableDetailRecord> & { id: number }
         >({
-          queryFn: async ({ id, ...patch }, _queryApi, _extraOptions, fetchWithBQ) => {
+          queryFn: async ({ id, ...patch }) => {
             const { data, error } = await supabase
               .from('accounts')
               .update({
@@ -87,7 +87,7 @@ export const accountingApi = createApi({
             }
             return { data: data as AgedReceivableDetailRecord };
           },
-          invalidatesTags: (result, error, { id }) => [
+          invalidatesTags: (_, __, { id }) => [
             { type: 'Accounts' as const, id },
           ],
         }),
