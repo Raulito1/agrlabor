@@ -1,30 +1,41 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
+import { useDispatch } from 'react-redux';
+import { accountingApi } from '../services/accountingApi';
 import { MetricCard } from '../features/dashboard/components/MetricCard';
 import { useGetAgedReceivableDetailQuery } from '../services/accountingApi';
 import { AgGridReact } from 'ag-grid-react';
 import { agGridColumns } from '../utils/agGridColumns';
-import { useMemo } from 'react';
 import type { ColDef } from 'ag-grid-community';
+import { useUpdateAgedReceivableDetailMutation } from '../services/accountingApi';
 
 const AccountingPage: React.FC = () => {
     const {
         data: rows = [],
         isLoading,
         error,
-    } = useGetAgedReceivableDetailQuery({
-        realmId: '1386066315',
-        reportDate: '2025-06-30',
-        startDueDate: '2025-01-01',
-        endDueDate: '2025-06-30',
-    });
+    } = useGetAgedReceivableDetailQuery();
 
-    // Helper to parse MM/DD/YY strings into Date
-    const parseDueDate = (value: string) => {
+    // Parse numeric balance and unify field names
+    const records = useMemo(() =>
+      rows.map((r) => ({
+        ...r,
+        openBalanceNum:
+          typeof r.openBalance === 'string'
+            ? parseFloat(r.openBalance.replace(/,/g, '')) || 0
+            : Number(r.openBalance) || 0,
+      })),
+      [rows]
+    );
+
+    // Helper to parse MM/DD/YY strings into Date, mapping 2-digit years to 2000s
+    const parseDueDate = (value?: string) => {
+        if (!value) return new Date(NaN);
         const parts = value.split('/');
         if (parts.length === 3) {
             const [m, d, yRaw] = parts.map((p) => parseInt(p, 10));
-            const y = yRaw;
-            return new Date(y, m - 1, d);
+            // Handle two-digit years (e.g., '23' => 2023)
+            const year = yRaw < 100 ? 2000 + yRaw : yRaw;
+            return new Date(year, m - 1, d);
         }
         return new Date(value);
     };
@@ -33,30 +44,93 @@ const AccountingPage: React.FC = () => {
     // Compute 21–30 day bucket
     const filteredRows21To30 = useMemo(() => {
         const today = new Date();
-        return rows.filter((r) => {
+        return records.filter((r) => {
             const due = parseDueDate(r.dueDate);
             const diffDays = Math.floor(
                 (today.getTime() - due.getTime()) / MS_PER_DAY
             );
             return diffDays >= 21 && diffDays <= 30;
         });
-    }, [rows, MS_PER_DAY]);
+    }, [records]);
+    console.log(
+        '[AccountingPage] filteredRows21To30:',
+        filteredRows21To30.length,
+        'rows',
+        filteredRows21To30.slice(0, 5)
+    );
+
+    // Debug: log sample diffDays to understand bucket distribution
+    const todayDebug = new Date();
+    const sampleDiffs = records.slice(0, 10).map((r) => {
+        const due = parseDueDate(r.dueDate);
+        const diffDays = Math.floor(
+            (todayDebug.getTime() - due.getTime()) / MS_PER_DAY
+        );
+        return { dueDate: r.dueDate, diffDays };
+    });
+    console.log('[AccountingPage] sample diffDays:', sampleDiffs);
 
     // Metrics for 21–30 day bucket
     const bucketCount = filteredRows21To30.length;
     const bucketBalance = filteredRows21To30.reduce(
-        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        (sum, r) => sum + (Number.isFinite(r.openBalanceNum) ? r.openBalanceNum : 0),
         0
     );
 
+    // Prepare grid rows from filtered subset, preserving API fields
+    const gridRows = useMemo(
+      () =>
+        filteredRows21To30.map((r) => ({
+          id: r.id,
+          date: r.date,
+          transactionType: r.transactionType,
+          num: r.num,
+          customerFullName: r.customerFullName,
+          dueDate: r.dueDate,
+          amount: r.amount,
+          openBalance: r.openBalance,
+          action_taken: r.action_taken,
+          slack_updated: r.slack_updated,
+          follow_up: r.follow_up,
+          escalation: r.escalation,
+        })),
+      [filteredRows21To30]
+    );
+    console.log('[AccountingPage] gridRows prepared:', gridRows.length, 'rows');
+
+    // RTK Query mutation for persisting updates
+    const [updateAgedReceivableDetail] = useUpdateAgedReceivableDetailMutation();
+    const dispatch = useDispatch();
+    const onCellValueChanged = useCallback(
+      async (params) => {
+        const { id, ...rest } = params.data;
+        // Optimistically update the RTK Query cache for the list
+        dispatch(
+          accountingApi.util.updateQueryData(
+            'getAgedReceivableDetail',
+            undefined,
+            (draft) => {
+              const idx = draft.findIndex((r) => r.id === id);
+              if (idx !== -1) Object.assign(draft[idx], rest);
+            }
+          )
+        );
+        try {
+          await updateAgedReceivableDetail({ id, ...rest }).unwrap();
+        } catch (err) {
+          console.error('Failed to update record', id, err);
+        }
+      },
+      [dispatch, updateAgedReceivableDetail]
+    );
     if (isLoading) return <div>Loading...</div>;
     if (error) return <div>Error loading data</div>;
 
     // Compute dynamic metrics
-    const totalInvoices = rows.length;
-    const outstandingBalance = rows.reduce(
-        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
-        0
+    const totalInvoices = records.length;
+    const outstandingBalance = records.reduce(
+      (sum, r) => sum + r.openBalanceNum,
+      0
     );
     const fmtCurrency = (val: number) =>
         `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -70,15 +144,6 @@ const AccountingPage: React.FC = () => {
     const pctBalanceOfTotal =
         outstandingBalance > 0 ? (bucketBalance / outstandingBalance) * 100 : 0;
 
-    // Initialize default values for editable fields
-    const gridRows = filteredRows21To30.map((r) => ({
-        ...r,
-        action_taken: '',
-        slack_updated: false,
-        checkboxB: false,
-        checkboxC: false,
-    }));
-
     // Additional editable columns
     const editableCols: ColDef[] = [
         // Dropdown column 1
@@ -88,7 +153,7 @@ const AccountingPage: React.FC = () => {
             editable: true,
             cellEditor: 'agSelectCellEditor',
             cellEditorParams: {
-                values: ['Accounting Email Sent'],
+                values: ['Accounting Email Sent', 'Payment Promised', 'Escalated to Sales', 'Payment Plan proposed'],
             },
         },
         {
@@ -99,15 +164,15 @@ const AccountingPage: React.FC = () => {
             cellRenderer: 'agCheckboxCellRenderer',
         },
         {
-            headerName: 'Checkbox B',
-            field: 'checkboxB',
+            headerName: 'Follow Up',
+            field: 'follow_up',
             editable: true,
             cellEditor: 'agCheckboxCellEditor',
             cellRenderer: 'agCheckboxCellRenderer',
         },
         {
-            headerName: 'Checkbox C',
-            field: 'checkboxC',
+            headerName: 'Escalation',
+            field: 'escalation',
             editable: true,
             cellEditor: 'agCheckboxCellEditor',
             cellRenderer: 'agCheckboxCellRenderer',
@@ -156,6 +221,10 @@ const AccountingPage: React.FC = () => {
                         gridOptions={{
                             theme: 'legacy',
                         }}
+                        getRowId={(params) => params.data.id}
+                        immutableData={true}
+                        deltaRowDataMode={true}
+                        onCellValueChanged={onCellValueChanged}
                     />
                 </div>
             </div>

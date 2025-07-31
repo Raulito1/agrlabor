@@ -21,11 +21,23 @@ const DashboardPage: React.FC = () => {
         data: rows = [],
         error,
         isLoading,
-    } = useGetAgedReceivableDetailQuery({
-        realmId: '1386066315',
-        reportDate: '2025-06-30',
-        startDueDate: '2025-01-01',
-        endDueDate: '2025-06-30',
+    } = useGetAgedReceivableDetailQuery();
+
+    // Normalize raw API data into our expected fields
+    const normalizedRows = rows.map((r: any) => ({
+        id: r.id,
+        customer: r.customerFullName || '',
+        dueDate: r.dueDate || '',
+        openBalance: typeof r.openBalance === 'string'
+            ? parseFloat(r.openBalance.replace(/,/g, ''))
+            : Number(r.openBalance) || 0,
+    }));
+
+    console.log('[DashboardPage] Query state:', {
+        rowsCount: rows.length,
+        sampleRows: normalizedRows.slice(0, 5),
+        isLoading,
+        error,
     });
 
     if (isLoading) return <div>Loading...</div>;
@@ -48,12 +60,24 @@ const DashboardPage: React.FC = () => {
 
     // Compute dynamic metrics with proper parsing and filtering
     const today = new Date();
-    const parsedRows = rows.map((r) => ({
+    const parsedRows = normalizedRows.map((r) => ({
         ...r,
         dueDateObj: parseDueDate(r.dueDate),
         balanceNum: Number.isFinite(r.openBalance) ? r.openBalance : 0,
     }));
+    console.log(
+        '[DashboardPage] parsedRows count:',
+        parsedRows.length,
+        'sample:',
+        parsedRows.slice(0, 5)
+    );
     const validRows = parsedRows.filter((r) => !isNaN(r.dueDateObj.getTime()));
+    console.log(
+        '[DashboardPage] validRows count:',
+        validRows.length,
+        'sample:',
+        validRows.slice(0, 5)
+    );
 
     const totalAR = parsedRows.reduce((sum, r) => sum + r.balanceNum, 0);
     const pastDue = parsedRows
@@ -76,6 +100,13 @@ const DashboardPage: React.FC = () => {
     const pctCollectedL30 =
         totalAR > 0 ? Math.round(((totalAR - pastDue) / totalAR) * 100) : 0;
 
+    console.log('[DashboardPage] Metrics:', {
+        totalAR,
+        pastDue,
+        avgDSO,
+        pctCollectedL30,
+    });
+
     // Compute aging buckets for the chart
     const agingBuckets = [
         { label: '0-30', value: 0 },
@@ -92,6 +123,7 @@ const DashboardPage: React.FC = () => {
         else if (diffDays <= 90) agingBuckets[2].value += r.balanceNum;
         else agingBuckets[3].value += r.balanceNum;
     });
+    console.log('[DashboardPage] agingBuckets:', agingBuckets);
 
     // Compute trend data: sum openBalance by dueDate
     const trendMap: Record<string, number> = {};
@@ -106,12 +138,13 @@ const DashboardPage: React.FC = () => {
         .sort(
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
+    console.log('[DashboardPage] trendData sample:', trendData.slice(0, 5));
 
     // Setup filters
     const buckets = ['0-30', '31-60', '61-90', '91+'];
     // Unique customer list
     const customerOptions = Array.from(
-        new Set(parsedRows.map((r) => r.customer))
+        new Set(normalizedRows.map((r) => r.customer))
     ).sort();
     // Filtered rows for grid
     const filteredRows = validRows.filter((r) => {
@@ -134,6 +167,12 @@ const DashboardPage: React.FC = () => {
             : true;
         return passBucket && passCustomer;
     });
+    console.log(
+        '[DashboardPage] filteredRows count:',
+        filteredRows.length,
+        'sample:',
+        filteredRows.slice(0, 5)
+    );
 
     // Format for display
     const fmtCurrency = (val: number) =>
@@ -195,9 +234,9 @@ const DashboardPage: React.FC = () => {
                             setSelectedCustomer(e.target.value || null)
                         }
                     >
-                        <option value="">All Customers</option>
+                        <option key="all-customers" value="">All Customers</option>
                         {customerOptions.map((c) => (
-                            <option key={c} value={c}>
+                            <option key={`customer-${c}`} value={c}>
                                 {c}
                             </option>
                         ))}

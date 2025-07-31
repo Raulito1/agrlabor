@@ -10,10 +10,7 @@ const __dirname = path.dirname(__filename);
 
 // Paths
 const inputCsv = path.resolve(__dirname, '../data/agedReceivable.csv');
-const outputJson = path.resolve(
-    __dirname,
-    '../src/mocks/fixtures/agedReceivableDetail.json'
-);
+const outputJson = path.resolve(__dirname, '../db.json');
 
 (async () => {
     try {
@@ -33,14 +30,21 @@ const outputJson = path.resolve(
             ],
         }).fromFile(inputCsv);
 
-        // Remove the 'skip' column
-        const jsonArray = rawArray.map(({ skip, ...rest }) => rest);
+        // Remove the 'skip' column and inject demo fields
+        const jsonArray = rawArray.map(({ skip, ...rest }, idx) => ({
+            id: idx,
+            ...rest,
+            action_taken: '',
+            slack_updated: false,
+            follow_up: false,
+            escalation: false,
+        }));
 
         // Write out the fixture
         fs.mkdirSync(path.dirname(outputJson), { recursive: true });
         fs.writeFileSync(
             outputJson,
-            JSON.stringify(jsonArray, null, 2),
+            JSON.stringify({ accounts: jsonArray }, null, 2),
             'utf8'
         );
         console.log(`✅ Wrote ${jsonArray.length} records to ${outputJson}`);

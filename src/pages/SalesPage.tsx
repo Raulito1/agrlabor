@@ -4,7 +4,11 @@ import { useGetAgedReceivableDetailQuery } from '../services/accountingApi';
 import { AgGridReact } from 'ag-grid-react';
 import { agGridColumns } from '../utils/agGridColumns';
 import { useMemo } from 'react';
+import { useDispatch } from 'react-redux';
+import { accountingApi } from '../services/accountingApi';
+import { useUpdateAgedReceivableDetailMutation } from '../services/accountingApi';
 import type { ColDef } from 'ag-grid-community';
+import { useCallback } from 'react';
 
 const SalesPage: React.FC = () => {
     // Fetch all invoice entries
@@ -12,20 +16,73 @@ const SalesPage: React.FC = () => {
         data: rows = [],
         isLoading,
         error,
-    } = useGetAgedReceivableDetailQuery({
-        realmId: '1386066315',
-        reportDate: '2025-06-30',
-        startDueDate: '2025-01-01',
-        endDueDate: '2025-06-30',
-    });
+    } = useGetAgedReceivableDetailQuery();
+    const [updateAgedReceivableDetail] = useUpdateAgedReceivableDetailMutation();
+    const dispatch = useDispatch();
+    const onCellValueChanged = useCallback(
+      async (params) => {
+        const { id, ...rest } = params.data;
+        dispatch(
+          accountingApi.util.updateQueryData(
+            'getAgedReceivableDetail',
+            undefined,
+            (draft) => {
+              const idx = draft.findIndex((r) => r.id === id);
+              if (idx !== -1) Object.assign(draft[idx], rest);
+            }
+          )
+        );
+        try {
+          await updateAgedReceivableDetail({ id, ...rest }).unwrap();
+        } catch (err) {
+          console.error('Failed to update record', id, err);
+        }
+      },
+      [dispatch, updateAgedReceivableDetail]
+    );
+    // Editable columns for ag-grid
+    const editableCols: ColDef[] = [
+      {
+        headerName: 'Action Taken',
+        field: 'action_taken',
+        editable: true,
+        cellEditor: 'agSelectCellEditor',
+        cellEditorParams: {
+          values: ['CSM/AE Email sent', 'Payment plan proposed', 'Payment plan established', 'Client unresponsive', 'Escalated to management'],
+        },
+      },
+      {
+        headerName: 'Slack Updated',
+        field: 'slack_updated',
+        editable: true,
+        cellEditor: 'agCheckboxCellEditor',
+        cellRenderer: 'agCheckboxCellRenderer',
+      },
+      {
+        headerName: 'Follow Up',
+        field: 'follow_up',
+        editable: true,
+        cellEditor: 'agCheckboxCellEditor',
+        cellRenderer: 'agCheckboxCellRenderer',
+      },
+      {
+        headerName: 'Escalation',
+        field: 'escalation',
+        editable: true,
+        cellEditor: 'agCheckboxCellEditor',
+        cellRenderer: 'agCheckboxCellRenderer',
+      },
+    ];
 
     // Helper to parse MM/DD/YY strings into Date
-    const parseDueDate = (value: string) => {
+    const parseDueDate = (value?: string) => {
+        if (!value) return new Date(NaN);
         const parts = value.split('/');
         if (parts.length === 3) {
             const [m, d, yRaw] = parts.map((p) => parseInt(p, 10));
-            const y = yRaw;
-            return new Date(y, m - 1, d);
+            // Handle two-digit years (e.g., '23' => 2023)
+            const year = yRaw < 100 ? 2000 + yRaw : yRaw;
+            return new Date(year, m - 1, d);
         }
         return new Date(value);
     };
@@ -42,13 +99,43 @@ const SalesPage: React.FC = () => {
             return diffDays >= 31 && diffDays <= 45;
         });
     }, [rows, MS_PER_DAY]);
+    // Clone row objects for mutability for AG Grid
+    const gridRows = useMemo(
+      () => filteredRows31To45.map(r => ({ ...r })),
+      [filteredRows31To45]
+    );
+    console.log(
+        '[SalesPage] filteredRows31To45:',
+        filteredRows31To45.length,
+        'rows',
+        filteredRows31To45.slice(0, 5)
+    );
+    // Debug: log sample diffDays for first 10 rows
+    const todayDebug = new Date();
+    const sampleDiffs = rows.slice(0, 10).map((r) => {
+        const due = parseDueDate(r.dueDate);
+        const diffDays = Math.floor(
+            (todayDebug.getTime() - due.getTime()) / MS_PER_DAY
+        );
+        return { dueDate: r.dueDate, diffDays };
+    });
+    console.log('[SalesPage] sample diffDays:', sampleDiffs);
 
     // Metrics for 31–45 day bucket
     const bucketCount = filteredRows31To45.length;
     const bucketBalance = filteredRows31To45.reduce(
-        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        (sum, r) => {
+            const val = typeof r.openBalance === 'string'
+                ? parseFloat(r.openBalance.replace(/,/g, '')) || 0
+                : r.openBalance;
+            return sum + val;
+        },
         0
     );
+    console.log('[SalesPage] bucket metrics:', {
+        bucketCount,
+        bucketBalance,
+    });
 
     if (isLoading) return <div>Loading...</div>;
     if (error) return <div>Error loading data</div>;
@@ -56,7 +143,12 @@ const SalesPage: React.FC = () => {
     // Compute dynamic metrics
     const totalInvoices = rows.length;
     const outstandingBalance = rows.reduce(
-        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        (sum, r) => {
+            const val = typeof r.openBalance === 'string'
+                ? parseFloat(r.openBalance.replace(/,/g, '')) || 0
+                : r.openBalance;
+            return sum + val;
+        },
         0
     );
 
@@ -98,8 +190,8 @@ const SalesPage: React.FC = () => {
                     style={{ width: '100%', height: 400 }}
                 >
                     <AgGridReact
-                        rowData={filteredRows31To45}
-                        columnDefs={agGridColumns as ColDef[]}
+                        rowData={gridRows}
+                        columnDefs={[(agGridColumns as ColDef[]), ...editableCols].flat()}
                         defaultColDef={{
                             flex: 1,
                             minWidth: 100,
@@ -111,6 +203,10 @@ const SalesPage: React.FC = () => {
                         gridOptions={{
                             theme: 'legacy',
                         }}
+                        getRowId={(params) => params.data.id}
+                        immutableData={true}
+                        deltaRowDataMode={true}
+                        onCellValueChanged={onCellValueChanged}
                     />
                 </div>
             </div>

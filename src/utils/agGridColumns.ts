@@ -1,7 +1,7 @@
 export const agGridColumns = [
     {
         headerName: 'Customer',
-        field: 'customer',
+        valueGetter: (params) => params.data.customer ?? params.data.customerFullName,
         sortable: true,
         filter: true,
     },

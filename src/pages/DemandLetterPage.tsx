@@ -1,8 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { MetricCard } from '../features/dashboard/components/MetricCard';
 import { useGetAgedReceivableDetailQuery } from '../services/accountingApi';
 import { AgGridReact } from 'ag-grid-react';
 import { agGridColumns } from '../utils/agGridColumns';
+import { useDispatch } from 'react-redux';
+import { accountingApi } from '../services/accountingApi';
+import { useUpdateAgedReceivableDetailMutation } from '../services/accountingApi';
 import type { ColDef } from 'ag-grid-community';
 
 const DemandLetterPage: React.FC = () => {
@@ -11,15 +14,28 @@ const DemandLetterPage: React.FC = () => {
         data: rows = [],
         isLoading,
         error,
-    } = useGetAgedReceivableDetailQuery({
-        realmId: '1386066315',
-        reportDate: '2025-06-30',
-        startDueDate: '2025-01-01',
-        endDueDate: '2025-06-30',
-    });
+    } = useGetAgedReceivableDetailQuery();
+
+    const [updateAgedReceivableDetail] = useUpdateAgedReceivableDetailMutation();
+    const dispatch = useDispatch();
+    const onCellValueChanged = useCallback(async (params) => {
+      const { id, ...rest } = params.data;
+      dispatch(
+        accountingApi.util.updateQueryData('getAgedReceivableDetail', undefined, draft => {
+          const idx = draft.findIndex(r => r.id === id);
+          if (idx !== -1) Object.assign(draft[idx], rest);
+        })
+      );
+      try {
+        await updateAgedReceivableDetail({ id, ...rest }).unwrap();
+      } catch (err) {
+        console.error('Failed to update record', id, err);
+      }
+    }, [dispatch, updateAgedReceivableDetail]);
 
     // Helper to parse MM/DD/YY strings into Date
-    const parseDueDate = (value: string) => {
+    const parseDueDate = (value?: string) => {
+        if (!value) return new Date(NaN);
         const parts = value.split('/');
         if (parts.length === 3) {
             const [m, d, yRaw] = parts.map((p) => parseInt(p, 10));
@@ -40,12 +56,19 @@ const DemandLetterPage: React.FC = () => {
             );
             return diffDays >= 91;
         });
-    }, [rows, MS_PER_DAY]);
+    }, [rows]);
+
+    const gridRows = useMemo(() => filteredRows91Plus.map(r => ({ ...r })), [filteredRows91Plus]);
 
     // Metrics for 91+ day bucket
     const bucketCount = filteredRows91Plus.length;
     const bucketBalance = filteredRows91Plus.reduce(
-        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        (sum, r) => {
+          const val = typeof r.openBalance === 'string'
+            ? parseFloat(r.openBalance.replace(/,/g, '')) || 0
+            : r.openBalance;
+          return sum + val;
+        },
         0
     );
 
@@ -55,7 +78,12 @@ const DemandLetterPage: React.FC = () => {
     // Compute dynamic metrics
     const totalInvoices = rows.length;
     const outstandingBalance = rows.reduce(
-        (sum, r) => sum + (Number.isFinite(r.openBalance) ? r.openBalance : 0),
+        (sum, r) => {
+          const val = typeof r.openBalance === 'string'
+            ? parseFloat(r.openBalance.replace(/,/g, '')) || 0
+            : r.openBalance;
+          return sum + val;
+        },
         0
     );
 
@@ -70,6 +98,39 @@ const DemandLetterPage: React.FC = () => {
     // Percentage of bucket balance relative to total outstanding balance
     const pctBalance91Plus =
         outstandingBalance > 0 ? (bucketBalance / outstandingBalance) * 100 : 0;
+
+    const editableCols: ColDef[] = [
+      {
+        headerName: 'Action Taken',
+        field: 'action_taken',
+        editable: true,
+        cellEditor: 'agSelectCellEditor',
+        cellEditorParams: {
+          values: ['Demand letter sent', 'Demand letter drafted', 'Follow up with legal'],
+        },
+      },
+      {
+        headerName: 'Slack Updated',
+        field: 'slack_updated',
+        editable: true,
+        cellEditor: 'agCheckboxCellEditor',
+        cellRenderer: 'agCheckboxCellRenderer',
+      },
+      {
+        headerName: 'Follow Up',
+        field: 'follow_up',
+        editable: true,
+        cellEditor: 'agCheckboxCellEditor',
+        cellRenderer: 'agCheckboxCellRenderer',
+      },
+      {
+        headerName: 'Escalation',
+        field: 'escalation',
+        editable: true,
+        cellEditor: 'agCheckboxCellEditor',
+        cellRenderer: 'agCheckboxCellRenderer',
+      },
+    ];
 
     return (
         <div>
@@ -97,8 +158,8 @@ const DemandLetterPage: React.FC = () => {
                     style={{ width: '100%', height: 400 }}
                 >
                     <AgGridReact
-                        rowData={filteredRows91Plus}
-                        columnDefs={agGridColumns as ColDef[]}
+                        rowData={gridRows}
+                        columnDefs={[(agGridColumns as ColDef[]), ...editableCols].flat()}
                         defaultColDef={{
                             flex: 1,
                             minWidth: 100,
@@ -110,6 +171,10 @@ const DemandLetterPage: React.FC = () => {
                         gridOptions={{
                             theme: 'legacy',
                         }}
+                        getRowId={params => params.data.id}
+                        immutableData={true}
+                        deltaRowDataMode={true}
+                        onCellValueChanged={onCellValueChanged}
                     />
                 </div>
             </div>
